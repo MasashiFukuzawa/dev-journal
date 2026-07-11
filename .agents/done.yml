@@ -1,0 +1,16 @@
+version: 1
+verify:
+  quick:
+    - uv run ruff check .
+    - uv run pytest
+    - tests/smoke_server.sh
+  standard:
+    - uv run ruff check .
+    - uv run pytest
+    - tests/smoke_server.sh
+    - cd web && npm ci && npm run build
+  full:
+    - uv run ruff check .
+    - uv run pytest
+    - tests/smoke_server.sh
+    - cd web && npm ci && npm run build

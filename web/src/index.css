@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f4efe5;
+  --color-surface: #faf8f3;
+  --color-surface-hover: #f0ead8;
+  --color-ink: #1c1714;
+  --color-ink-mid: #6b5f56;
+  --color-ink-light: #9c9088;
+  --color-cognac: #8b5e2e;
+  --color-cognac-pale: #f0e8d8;
+  --color-border: #dcd4c4;
+  --color-border-light: #e8e0d0;
+
+  --font-fraunces: "Fraunces", serif;
+  --font-source-serif: "Source Serif 4", "Noto Serif JP", Georgia, serif;
+  --font-jetbrains: "JetBrains Mono", monospace;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-source-serif);
+    font-size: 15px;
+    line-height: 1.75;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.025;
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  a {
+    color: var(--color-cognac);
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+}
+
+/* Strip hljs default background/padding — wrapper <pre> provides styling */
+.hljs {
+  background: transparent;
+  padding: 0;
+}
+
+/* iOS zoom prevention */
+@media (max-width: 767px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

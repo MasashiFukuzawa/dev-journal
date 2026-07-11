@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: uv run ruff check .
+      - run: uv run pytest
+      - run: tests/smoke_server.sh
+      - run: npm ci && npm audit --audit-level=high && npm run build
+        working-directory: web
+      - name: Reject private identifiers and generated runtime data
+        run: |
+          uv run pytest tests/test_no_private_data.py
+          tests/scan_public_content.sh
+          test -z "$(find . -type f \( -name '*.db' -o -name '*.db-wal' -o -name '*.db-shm' \) -print)"
+      - name: Scan committed history
+        run: >-
+          git log --all -p -- . ':!web/package-lock.json' ':!uv.lock'
+          ':!tests/scan_public_content.sh' ':!tests/test_no_private_data.py'
+          | tests/scan_public_content.sh --stdin

@@ -1,0 +1,22 @@
+github:
+  repositories:
+    - example-org/example-repo
+  done_status: Done
+  lookback_days: 14
+
+analysis:
+  command: claude
+  model: claude-sonnet-4-6
+  timeout_seconds: 180
+
+server:
+  host: 127.0.0.1
+  port: 8421
+  poll_interval_seconds: 1800
+  collection_enabled: true
+  # Binding beyond loopback exposes issue content. Set true only behind an
+  # authenticated, trusted network boundary.
+  allow_unsafe_non_loopback: false
+
+timezone: UTC
+retention_days: 90
