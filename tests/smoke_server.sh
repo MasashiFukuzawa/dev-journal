@@ -31,6 +31,11 @@ for _ in $(seq 1 50); do
   if curl --fail --silent "http://127.0.0.1:$PORT/api/health" | grep -q '"ok"'; then
     test -f "$XDG_DATA_HOME/dev-journal/journal.db"
     test ! -e "${HOME}/.local/share/dev-journal/journal.db.test-marker"
+    if [ -f "$ROOT/server/static/index.html" ]; then
+      INDEX_HASH="$(curl --fail --silent "http://127.0.0.1:$PORT/" | shasum -a 256)"
+      test "$(curl --path-as-is --fail --silent "http://127.0.0.1:$PORT/../pyproject.toml" | shasum -a 256)" = "$INDEX_HASH"
+      test "$(curl --path-as-is --fail --silent "http://127.0.0.1:$PORT/%2e%2e/pyproject.toml" | shasum -a 256)" = "$INDEX_HASH"
+    fi
     exit 0
   fi
   sleep 0.1

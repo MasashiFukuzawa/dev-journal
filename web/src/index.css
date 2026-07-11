@@ -60,6 +60,7 @@
   input[type="date"],
   select,
   textarea {
+    /* biome-ignore lint/complexity/noImportantStyles: prevents iOS input zoom */
     font-size: 16px !important;
   }
 }

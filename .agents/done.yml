@@ -3,14 +3,15 @@ verify:
   quick:
     - uv run ruff check .
     - uv run pytest
+    - cd web && npm run lint && npm run build
     - tests/smoke_server.sh
   standard:
     - uv run ruff check .
     - uv run pytest
+    - cd web && npm ci && npm run lint && npm run build
     - tests/smoke_server.sh
-    - cd web && npm ci && npm run build
   full:
     - uv run ruff check .
     - uv run pytest
+    - cd web && npm ci && npm audit --audit-level=high && npm run lint && npm run build
     - tests/smoke_server.sh
-    - cd web && npm ci && npm run build

@@ -11,23 +11,23 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-node@v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: uv run ruff check .
       - run: uv run pytest
-      - run: tests/smoke_server.sh
-      - run: npm ci && npm audit --audit-level=high && npm run build
+      - run: npm ci && npm audit --audit-level=high && npm run lint && npm run build
         working-directory: web
+      - run: tests/smoke_server.sh
       - name: Reject private identifiers and generated runtime data
         run: |
           uv run pytest tests/test_no_private_data.py

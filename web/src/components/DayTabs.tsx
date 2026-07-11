@@ -3,7 +3,7 @@ import type { DayMeta } from "../types";
 
 function formatTabDate(date: string): string {
 	const [, m, d] = date.split("-");
-	return `${parseInt(m)}/${parseInt(d)}`;
+	return `${parseInt(m, 10)}/${parseInt(d, 10)}`;
 }
 
 interface Props {

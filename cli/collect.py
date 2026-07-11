@@ -12,12 +12,13 @@ import json
 import re
 import subprocess
 import sys
+import warnings
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).parent))
-from config import load_config, state_dir
+from config import ensure_private_dir, ensure_private_file, load_config, state_dir
 from db import get_connection, init_db
 
 GH_BIN = "gh"
@@ -28,11 +29,11 @@ def _timezone() -> ZoneInfo:
 
 
 def _lock_file() -> Path:
-    return state_dir() / "collect.lock"
+    return ensure_private_dir(state_dir()) / "collect.lock"
 
 
 def _claude_raw_log() -> Path:
-    return state_dir() / "analysis-raw.log"
+    return ensure_private_dir(state_dir()) / "analysis-raw.log"
 
 
 DEEP_DIVE_PROMPT = """\
@@ -99,32 +100,137 @@ def _run_gh(*args: str) -> dict | list:
     return json.loads(result.stdout)
 
 
+PROJECT_QUERY = """
+query($login: String!, $number: Int!, $cursor: String) {
+  OWNER(login: $login) {
+    projectV2(number: $number) {
+      items(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          content { ... on Issue { number url closedAt repository { nameWithOwner } } }
+          fieldValues(first: 50) {
+            nodes {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                field { ... on ProjectV2SingleSelectField { name } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+def _project_page(owner: str, number: int, cursor: str | None) -> dict:
+    """Fetch one ProjectV2 page, supporting organization and user owners."""
+    last_error: subprocess.CalledProcessError | None = None
+    for owner_type in ("organization", "user"):
+        query = PROJECT_QUERY.replace("OWNER", owner_type)
+        args = [
+            "api",
+            "graphql",
+            "-f",
+            f"query={query}",
+            "-F",
+            f"login={owner}",
+            "-F",
+            f"number={number}",
+        ]
+        if cursor:
+            args.extend(("-F", f"cursor={cursor}"))
+        try:
+            result = _run_gh(*args)
+        except subprocess.CalledProcessError as exc:
+            last_error = exc
+            continue
+        owner_data = result.get("data", {}).get(owner_type) if isinstance(result, dict) else None
+        if owner_data and owner_data.get("projectV2"):
+            return owner_data["projectV2"]["items"]
+    if last_error:
+        raise last_error
+    raise RuntimeError(f"GitHub Project {owner}/{number} was not found")
+
+
+def _get_scoped_project_items() -> list[dict]:
+    cfg = load_config().github
+    assert cfg.project_owner is not None and cfg.project_number is not None
+    repositories = set(cfg.repositories)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=cfg.lookback_days)
+    items: list[dict] = []
+    cursor: str | None = None
+    while True:
+        page = _project_page(cfg.project_owner, cfg.project_number, cursor)
+        for node in page.get("nodes", []):
+            content = node.get("content") or {}
+            repo = (content.get("repository") or {}).get("nameWithOwner")
+            closed_at = content.get("closedAt")
+            if (
+                not repo
+                or (repositories and repo not in repositories)
+                or not closed_at
+            ):
+                continue
+            try:
+                closed_at_dt = datetime.fromisoformat(closed_at.replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                continue
+            if closed_at_dt < cutoff:
+                continue
+            status = ""
+            for value in (node.get("fieldValues") or {}).get("nodes", []):
+                if (value.get("field") or {}).get("name") == "Status":
+                    status = value.get("name", "")
+                    break
+            if status.casefold() == cfg.done_status.casefold():
+                items.append(
+                    {
+                        "content": {
+                            "type": "Issue",
+                            "number": content["number"],
+                            "url": content["url"],
+                        },
+                        "status": status,
+                    }
+                )
+        page_info = page.get("pageInfo", {})
+        if not page_info.get("hasNextPage"):
+            return items
+        cursor = page_info.get("endCursor")
+
+
 def _get_done_items() -> list[dict]:
     cfg = load_config()
+    if cfg.github.project_owner is not None:
+        return _get_scoped_project_items()
+    warnings.warn(
+        "github.project_owner/project_number are unset; using legacy status matching across "
+        "all projects. Configure a Project scope to avoid collecting an unrelated Done item.",
+        UserWarning,
+        stacklevel=2,
+    )
     cutoff_utc = (datetime.now(timezone.utc) - timedelta(days=cfg.github.lookback_days)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
     done = []
     for repo in cfg.github.repositories:
         try:
-            issues = _run_gh(
-                "issue",
-                "list",
-                "--repo",
-                repo,
-                "--state",
-                "closed",
-                "--limit",
-                "100",
-                "--json",
-                "number,url,closedAt",
+            pages = _run_gh(
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{repo}/issues?state=closed&per_page=100&since={cutoff_utc}",
             )
+            issues = [issue for page in pages for issue in page if "pull_request" not in issue]
         except subprocess.CalledProcessError as e:
             print(f"Warning: failed to list issues for {repo}: {e}", file=sys.stderr)
             continue
 
         for issue in issues:
-            if issue.get("closedAt", "") < cutoff_utc:
+            closed_at = issue.get("closedAt", issue.get("closed_at", ""))
+            if closed_at < cutoff_utc:
                 continue
             try:
                 detail = _run_gh(
@@ -153,7 +259,7 @@ def _get_done_items() -> list[dict]:
                             "content": {
                                 "type": "Issue",
                                 "number": issue["number"],
-                                "url": issue["url"],
+                                "url": issue.get("html_url") or issue.get("url"),
                             },
                             "status": "Done",
                         }
@@ -529,10 +635,12 @@ def generate_deep_dive_via_claude_cli(issue: dict) -> dict | None:
         return {**issue, "deep_dive_json": parsed.get("deep_dive_json", parsed)}
     except (json.JSONDecodeError, ValueError, KeyError) as e:
         print(f"[collect] failed to parse claude output: {e}", file=sys.stderr)
+        if not load_config().analysis.save_raw_output:
+            return None
         try:
             log_path = _claude_raw_log()
-            log_path.parent.mkdir(parents=True, exist_ok=True)
             log_path.write_text(result.stdout, encoding="utf-8")
+            ensure_private_file(log_path)
         except OSError:
             pass
         return None
@@ -562,6 +670,7 @@ def run_collect_cycle() -> dict:
     lock_file = _lock_file()
     lock_file.parent.mkdir(parents=True, exist_ok=True)
     lock_fd = open(lock_file, "w")
+    ensure_private_file(lock_file)
     try:
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:

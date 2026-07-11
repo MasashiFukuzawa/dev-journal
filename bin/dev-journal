@@ -1,0 +1,37 @@
+#!/bin/bash
+set -euo pipefail
+
+SELF_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+ROOT="${DEV_JOURNAL_HOME:-$SELF_ROOT}"
+
+if [ ! -f "$ROOT/pyproject.toml" ]; then
+  echo "DEV_JOURNAL_HOME does not point to a dev-journal checkout: $ROOT" >&2
+  exit 2
+fi
+
+command="${1:-help}"
+if [ "$#" -gt 0 ]; then shift; fi
+case "$command" in
+  serve) exec "$ROOT/scripts/run_server.sh" "$@" ;;
+  collect) exec uv run --project "$ROOT" python "$ROOT/cli/collect.py" "$@" ;;
+  prune) exec uv run --project "$ROOT" python "$ROOT/cli/prune.py" "$@" ;;
+  backup) exec "$ROOT/scripts/backup_db.sh" "$@" ;;
+  install-service) exec "$ROOT/launchd/install.sh" install ;;
+  uninstall-service) exec "$ROOT/launchd/install.sh" uninstall ;;
+  service-status) exec "$ROOT/launchd/install.sh" status ;;
+  help|-h|--help)
+    cat <<'EOF'
+Usage: dev-journal <command> [arguments]
+
+Commands:
+  serve                 Start the local web server
+  collect               Run collect.py subcommands
+  prune                 Remove expired journal entries
+  backup                Back up the SQLite database
+  install-service       Install and start the macOS launchd services
+  uninstall-service     Stop and remove the macOS launchd services
+  service-status        Show macOS launchd service status
+EOF
+    ;;
+  *) echo "Unknown command: $command" >&2; exit 2 ;;
+esac

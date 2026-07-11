@@ -1,8 +1,9 @@
-import os
 import sqlite3
 from pathlib import Path
 
-from config import data_dir
+from config import data_dir, ensure_private_dir, ensure_private_file
+
+SCHEMA_VERSION = 4
 
 
 def default_db_path() -> Path:
@@ -77,8 +78,20 @@ CREATE INDEX IF NOT EXISTS idx_issue_states_confirmed ON issue_states(is_confirm
 
 
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
-    path = db_path or str(default_db_path())
+    if db_path == ":memory:":
+        conn = sqlite3.connect(":memory:", check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+    path = Path(db_path) if db_path else default_db_path()
+    if path.parent != Path("."):
+        if db_path:
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        else:
+            ensure_private_dir(path.parent)
+    ensure_private_file(path, create=True)
     conn = sqlite3.connect(path, check_same_thread=False)
+    ensure_private_file(path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
@@ -87,26 +100,25 @@ def get_connection(db_path: str | None = None) -> sqlite3.Connection:
 
 def init_db(db_path: str | None = None) -> None:
     """Create tables if they don't exist. Idempotent."""
-    os.makedirs(os.path.dirname(db_path or str(default_db_path())), exist_ok=True)
     conn = get_connection(db_path)
+    current_version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if current_version > SCHEMA_VERSION:
+        conn.close()
+        raise RuntimeError(
+            f"database schema version {current_version} is newer than supported {SCHEMA_VERSION}"
+        )
     conn.executescript(SCHEMA_SQL)
-    try:
-        conn.execute("ALTER TABLE chat_messages ADD COLUMN status TEXT NOT NULL DEFAULT 'done'")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    def add_column_if_missing(table: str, column: str, declaration: str) -> None:
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
 
-    try:
-        conn.execute("ALTER TABLE chat_threads ADD COLUMN last_read_assistant_message_id INTEGER")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-
-    try:
-        conn.execute("ALTER TABLE chat_threads ADD COLUMN last_read_at TEXT")
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    add_column_if_missing("chat_messages", "status", "TEXT NOT NULL DEFAULT 'done'")
+    add_column_if_missing(
+        "chat_threads", "last_read_assistant_message_id", "INTEGER"
+    )
+    add_column_if_missing("chat_threads", "last_read_at", "TEXT")
+    conn.commit()
 
     conn.execute("""
         UPDATE chat_threads
@@ -154,12 +166,11 @@ def init_db(db_path: str | None = None) -> None:
         );
     """)
 
-    try:
-        conn.execute(
-            "CREATE UNIQUE INDEX idx_chat_threads_issue_refs ON chat_threads(issue_refs_json)"
-        )
-        conn.commit()
-    except sqlite3.OperationalError:
-        pass  # Index already exists
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_threads_issue_refs "
+        "ON chat_threads(issue_refs_json)"
+    )
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    conn.commit()
 
     conn.close()

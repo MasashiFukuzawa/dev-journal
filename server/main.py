@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -42,6 +43,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="dev-journal", version="0.1.0", lifespan=lifespan)
 
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(load_config().server.allowed_hosts))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -68,7 +71,6 @@ if static_dir.exists() and index_html.exists():
 
     @app.get("/{full_path:path}")
     async def spa_fallback(full_path: str):
-        file_path = static_dir / full_path
-        if full_path and file_path.is_file():
-            return FileResponse(file_path)
+        # Static assets are served exclusively by the mounted /assets app.
+        # Returning arbitrary files here would allow traversal outside static_dir.
         return FileResponse(index_html)

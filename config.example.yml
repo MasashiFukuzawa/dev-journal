@@ -1,6 +1,9 @@
 github:
   repositories:
     - example-org/example-repo
+  # Scope collection to exactly one GitHub Project. Both fields are required.
+  project_owner: example-org
+  project_number: 1
   done_status: Done
   lookback_days: 14
 
@@ -8,6 +11,8 @@ analysis:
   command: claude
   model: claude-sonnet-4-6
   timeout_seconds: 180
+  # Debug only. Raw model output may contain confidential issue content.
+  save_raw_output: false
 
 server:
   host: 127.0.0.1
@@ -17,6 +22,9 @@ server:
   # Binding beyond loopback exposes issue content. Set true only behind an
   # authenticated, trusted network boundary.
   allow_unsafe_non_loopback: false
+  allowed_hosts:
+    - 127.0.0.1
+    - localhost
 
 timezone: UTC
 retention_days: 90

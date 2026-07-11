@@ -1,3 +1,4 @@
+import stat
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,14 @@ def test_config_precedence(monkeypatch, tmp_path: Path) -> None:
     assert load_config().server.port == 9100
     assert load_config(str(explicit_config)).server.port == 9200
     assert config_path(str(explicit_config)) == explicit_config
+
+
+def test_explicit_config_preserves_existing_file_permissions(tmp_path: Path) -> None:
+    path = tmp_path / "shared.yml"
+    path.write_text("server:\n  port: 9200\n", encoding="utf-8")
+    path.chmod(0o644)
+    load_config(str(path))
+    assert stat.S_IMODE(path.stat().st_mode) == 0o644
 
 
 def test_safe_server_defaults() -> None:
@@ -60,7 +69,26 @@ def test_non_loopback_requires_explicit_unsafe_opt_in(tmp_path: Path) -> None:
         load_config(str(path))
 
     path.write_text(
-        "server:\n  host: 0.0.0.0\n  allow_unsafe_non_loopback: true\n",
+        "server:\n  host: 0.0.0.0\n  allow_unsafe_non_loopback: true\n"
+        "  allowed_hosts: [journal.example.test]\n",
         encoding="utf-8",
     )
     assert load_config(str(path)).server.host == "0.0.0.0"
+
+
+def test_non_loopback_rejects_wildcard_trusted_host(tmp_path: Path) -> None:
+    path = tmp_path / "bind.yml"
+    path.write_text(
+        "server:\n  host: 0.0.0.0\n  allow_unsafe_non_loopback: true\n"
+        "  allowed_hosts: ['*']\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="must not contain"):
+        load_config(str(path))
+
+
+def test_project_scope_must_be_complete(tmp_path: Path) -> None:
+    path = tmp_path / "project.yml"
+    path.write_text("github:\n  project_owner: example-org\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="must be set together"):
+        load_config(str(path))

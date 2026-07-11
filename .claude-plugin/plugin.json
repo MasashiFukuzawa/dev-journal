@@ -1,5 +1,6 @@
 {
   "name": "dev-journal",
   "version": "0.1.0",
-  "description": "Turn completed GitHub issues into an AI-assisted development journal."
+  "description": "Turn completed GitHub issues into an AI-assisted development journal.",
+  "author": {"name": "dev-journal contributors"}
 }

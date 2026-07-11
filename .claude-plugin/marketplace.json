@@ -1,0 +1,8 @@
+{
+  "name": "dev-journal",
+  "description": "Local, AI-assisted development journal for completed GitHub work",
+  "owner": {"name": "dev-journal contributors"},
+  "plugins": [
+    {"name": "dev-journal", "source": "./", "description": "Collect and review completed GitHub Project issues"}
+  ]
+}

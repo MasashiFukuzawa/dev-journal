@@ -14,6 +14,7 @@ GitHub の完了 Issue を SQLite に保存し、Claude CLI が背景・決定�
 - `claude` CLI が利用できること
 - `uv` が利用できること
 - `${XDG_CONFIG_HOME:-$HOME/.config}/dev-journal/config.yml` が存在すること
+- `DEV_JOURNAL_HOME` が clone した runtime を指すか、`dev-journal` が `PATH` 上にあること
 
 設定ファイルは次の優先順位で解決する。
 
@@ -23,16 +24,16 @@ GitHub の完了 Issue を SQLite に保存し、Claude CLI が背景・決定�
 
 ## 操作
 
-リポジトリのルートで実行する。
+安定 CLI から実行する。Skill plugin と runtime clone は別配布である。
 
 ```bash
-uv run python cli/collect.py fetch-pending
-uv run python cli/collect.py save --file /path/to/processed.json
-uv run python cli/prune.py
-uv run uvicorn server.main:app --host 127.0.0.1 --port 8421
+dev-journal collect fetch-pending
+dev-journal collect save --file /path/to/processed.json
+dev-journal prune
+dev-journal serve
 ```
 
-通常は `run_collect_cycle()` が取得、Claude CLI による解析、保存、カテゴリ分類、古い記録の削除まで行う。外部公開が必要なら、既定の `127.0.0.1` を変更する前に認証・ネットワーク境界を確認する。
+通常は `run_collect_cycle()` が取得、Claude CLI による解析、保存、カテゴリ分類、古い記録の削除まで行う。外部公開が必要なら、既定の `127.0.0.1` を変更する前に認証、`allowed_hosts`、ネットワーク境界を確認する。
 
 ## データ配置
 

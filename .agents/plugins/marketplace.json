@@ -1,0 +1,12 @@
+{
+  "name": "dev-journal",
+  "interface": {"displayName": "Dev Journal"},
+  "plugins": [
+    {
+      "name": "dev-journal",
+      "source": {"source": "local", "path": "./"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}
