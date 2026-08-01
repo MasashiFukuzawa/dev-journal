@@ -1,18 +1,28 @@
 version: 1
 repo: dev-journal
 verify:
-  quick:
-    - uv run ruff check .
-    - uv run pytest
-    - cd web && npm run lint && npm run build
-    - tests/smoke_server.sh
-  standard:
-    - uv run ruff check .
-    - uv run pytest
-    - cd web && npm ci && npm run lint && npm run build
-    - tests/smoke_server.sh
+  - uv run ruff check .
+  - uv run pytest
+  - tests/smoke_server.sh
+  - {run: "cd web && npm run lint && npm run build", when_changed: "web/**"}
+tier_floors:
   full:
-    - uv run ruff check .
-    - uv run pytest
-    - cd web && npm ci && npm audit --audit-level=high && npm run lint && npm run build
-    - tests/smoke_server.sh
+    - server/main.py
+    - server/deps.py
+    - cli/db.py
+    - cli/collect.py
+  full_conditions:
+    - server の bind/host/認証境界のデフォルトを変更する
+    - SQLite スキーマを変更する
+    - GitHub Project 収集スコープ（project_owner/project_number/repositories）を変更する
+    - private データ除外ロジック（tests/scan_public_content.sh・tests/test_no_private_data.py の判定基準）を変更する
+  quick:
+    - README.md
+    - CONTRIBUTING.md
+    - SECURITY.md
+    - LICENSE
+review_criteria:
+  - private identifiers・credentials・issue 本文がコミットされていないか（tests/scan_public_content.sh のパターンが拾わない新しい漏洩経路も含めて確認）
+  - Web server の bind/host/認証境界のデフォルト（loopback・allowed_hosts）が緩んでいないか
+  - SQLite スキーマ・CLI コマンド・API ルートの後方互換が無承認で破られていないか
+  - GitHub Project 収集スコープの変更が意図しない収集範囲拡大を招かないか
