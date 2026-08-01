@@ -1,4 +1,5 @@
 version: 1
+repo: dev-journal
 verify:
   quick:
     - uv run ruff check .
