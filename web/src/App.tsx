@@ -5,7 +5,7 @@ import {
 	Route,
 	Routes,
 	useParams,
-} from "react-router-dom";
+} from "react-router";
 import { api } from "./api/client";
 import { ChatPanel } from "./components/ChatPanel";
 import { Layout } from "./components/Layout";
